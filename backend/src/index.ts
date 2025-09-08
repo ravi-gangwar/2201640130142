@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import { log as logClient } from './utils/logClient';
+import { createRedirectRouter } from './routes/redirect';
 import { createShortUrlRouter } from './routes/shorturls';
 
 const app = express();
@@ -27,6 +28,8 @@ mongoose.connect(mongoUri).then(async () => {
 });
 
 app.use('/shorturls', createShortUrlRouter(log));
+app.use('/', createRedirectRouter());
+
 
 app.get('/health', async (_req, res) => {
   await log('backend', 'debug', 'route', 'health');

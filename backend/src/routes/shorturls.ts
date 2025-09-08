@@ -26,6 +26,7 @@ export function createShortUrlRouter(_log: any) {
       const doc = await ShortUrl.create({ shortCode: code, longUrl: url, createdAt: now, expiresAt });
       await logClient('backend', 'info', 'service', 'short url created');
       const host = `${req.protocol}://${req.get('host')}`;
+      // Return simple top-level short link; '/r/:code' is also supported
       return res.status(201).json({ shortLink: `${host}/${code}`, expiry: expiresAt.toISOString() });
     } catch (e: any) {
       await logClient('backend', 'error', 'handler', `error creating short url: ${e.message}`);
@@ -33,64 +34,6 @@ export function createShortUrlRouter(_log: any) {
     }
   });
 
-  router.get('/:code', async (req, res) => {
-    const code = req.params.code;
-    const doc = await ShortUrl.findOne({ shortCode: code });
-    if (!doc) return res.status(404).json({ message: 'not found' });
-    const stats = {
-      clicks: doc.clicks,
-      url: doc.longUrl,
-      createdAt: doc.createdAt,
-      expiry: doc.expiresAt,
-      clicksDetail: doc.clicksDetail,
-    };
-    return res.json(stats);
-  });
-
-  // Redirect endpoint: GET /code -> 302 to long URL and increment click
-  router.get('/r/:code', async (req, res) => {
-    const code = req.params.code;
-    const doc = await ShortUrl.findOne({ shortCode: code });
-    if (!doc) return res.status(404).send('Not found');
-    if (doc.expiresAt.getTime() < Date.now()) return res.status(410).send('Link expired');
-    doc.clicks += 1;
-    const detail: { ts: Date; referer?: string; ip?: string } = { ts: new Date() };
-    const ref = req.get('referer');
-    if (ref) detail.referer = ref;
-    const ipAddr = (req.ip as string | undefined) || (req.headers['x-forwarded-for'] as string | undefined);
-    if (ipAddr) detail.ip = ipAddr;
-    doc.clicksDetail.push(detail);
-    await doc.save();
-    await logClient('backend', 'info', 'handler', `redirect ${code}`);
-    return res.redirect(302, doc.longUrl);
-  });
-
-  // Dashboard: list URLs with pagination
-  router.get('/', async (req, res) => {
-    const page = Math.max(parseInt(String(req.query.page || '1'), 10) || 1, 1);
-    const limit = Math.min(Math.max(parseInt(String(req.query.limit || '10'), 10) || 10, 1), 100);
-    const skip = (page - 1) * limit;
-    const [items, total] = await Promise.all([
-      ShortUrl.find({}).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
-      ShortUrl.countDocuments({})
-    ]);
-    return res.json({ page, limit, total, items });
-  });
-
-  // Dashboard: summary stats
-  router.get('/stats/summary', async (_req, res) => {
-    const now = new Date();
-    const total = await ShortUrl.countDocuments({});
-    const active = await ShortUrl.countDocuments({ expiresAt: { $gt: now } });
-    const expired = total - active;
-    const clicksAgg = await ShortUrl.aggregate([
-      { $group: { _id: null, clicks: { $sum: '$clicks' } } }
-    ]);
-    const clicks = clicksAgg[0]?.clicks || 0;
-    return res.json({ total, active, expired, clicks });
-  });
-
   return router;
 }
-
 

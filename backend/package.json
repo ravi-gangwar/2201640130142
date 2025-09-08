@@ -2,10 +2,9 @@
   "name": "backend",
   "version": "1.0.0",
   "main": "dist/index.js",
-  "type": "module",
   "scripts": {
     "build": "tsc -p .",
-    "dev": "node --loader ts-node/esm src/index.ts",
+    "dev": "ts-node --transpile-only src/index.ts",
     "start": "node dist/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
